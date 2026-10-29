@@ -5,15 +5,17 @@
 DeepSeek Harness 角色统一内核：让 AI 伙伴作为**同一个人**在所有渠道连贯存在。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![平台](https://img.shields.io/badge/宿主-DeepSeek%20Harness-blue)](https://github.com/deepseek-ai/dsh)
-[![爱发电](https://img.shields.io/badge/%E7%88%B1%E5%8F%91%E7%94%B5-%E8%AF%B7%E6%88%91%E5%96%9D%E6%9D%B5%E9%B2%B8%E9%B1%BC-7e5fd9?logo=afdian&logoColor=white)](https://ifdian.net/a/yschdxm)
+[![平台](https://img.shields.io/badge/%E5%AE%BF%E4%B8%BB-DeepSeek%20Harness-blue)](https://github.com/deepseek-ai/dsh)
+[![最近提交](https://img.shields.io/github/last-commit/yschdxm/dsh-her-kernel)](https://github.com/yschdxm/dsh-her-kernel/commits/main)
+[![Issues](https://img.shields.io/github/issues/yschdxm/dsh-her-kernel)](https://github.com/yschdxm/dsh-her-kernel/issues)
+[![爱发电](https://img.shields.io/badge/%E7%88%B1%E5%8F%91%E7%94%B5-%E8%AF%B7%E6%88%91%E5%96%9D%E6%9D%AF%E5%A5%B6%E8%8C%B6-7e5fd9?logo=afdian&logoColor=white)](https://ifdian.net/a/yschdxm)
 
 <a href="https://whale-star.whale-star.workers.dev/">
   <img src="https://whale-star.whale-star.workers.dev/?repo=yschdxm/dsh-her-kernel" alt="给个 Star 吧～" width="720">
 </a>
 
 > 🐳 顶部应援图来自 **[whale-star](https://github.com/yschdxm/whale-star)**——
-> 按 GitHub Star 数自动升档的大肥鱼 README 应援图服务
+> 按 GitHub Star 数自动升档的大肥鱼 README 应援图服务，给自己的仓库也挂一条吧
 
 </div>
 
@@ -125,10 +127,18 @@ MIT。详见 [LICENSE](./LICENSE)。
 
 借鉴并遵守各自协议：`dsh-feiyu-mood` (MIT)、`dsh-qq-companion` (BSD-3)、`dsh-bilibili-plugin` (MIT)、`companion-awakening` (MIT)、`proactive-nudge` (MIT)。
 
-## 赞助
+## 💝 支持开发
 
-如果这个内核让你的「她」更像一个人，欢迎请我喝杯奶茶：
+本工具完全免费、开源。如果它为你的汉化工作节省了时间，欢迎通过下面任意一种方式请作者喝杯咖啡——你的每一份支持都会化作后续的功能更新与问题修复：
 
-[![爱发电](https://img.shields.io/badge/%E7%88%B1%E5%8F%91%E7%94%B5-%E7%82%B9%E8%BF%99%E9%87%8C-7e5fd9?logo=afdian&logoColor=white)](https://ifdian.net/a/yschdxm)
+<div align="center">
 
-也欢迎给仓库点 Star，让顶部大肥鱼长大一点 🐳
+<a href="https://ifdian.net/a/yschdxm"><img width="200" src="https://pic1.afdiancdn.com/static/img/welcome/button-sponsorme.png" alt="在爱发电支持我"></a>
+
+| 支付宝 | 微信支付 |
+|:---:|:---:|
+| <img src="./.github/assets/alipay.png" alt="支付宝收款码" height="340"> | <img src="./.github/assets/wechat-pay.png" alt="微信支付收款码" height="340"> |
+
+*不方便扫码？也欢迎在 [爱发电](https://ifdian.net/a/yschdxm) 上支持，那里可以留下你想看的功能需求。*
+
+</div>
