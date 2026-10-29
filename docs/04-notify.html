@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>通知与消息层 · 工作逻辑</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+<header class="doc">
+  <h1>通知与消息层</h1>
+  <div class="sub">渠道消息只入库、记未读、按规则决定是否弹通知。消息本身不直接进入她的对话。</div>
+</header>
+
+<nav class="toc">
+  <a href="00-overview.html">总览</a>
+  <a href="01-heart.html">心绪层</a>
+  <a href="02-life.html">日子层</a>
+  <a href="03-memory.html">记忆层</a>
+  <a href="04-notify.html">通知与消息</a>
+  <a href="05-session.html">会话与出站</a>
+  <a href="06-rules.html">规则触发</a>
+  <a href="07-bridge.html">QQ 桥接</a>
+</nav>
+
+<section class="card">
+  <h2>入站数据流</h2>
+  <div class="mermaid">
+flowchart LR
+  N[NapCat 事件] --> B[桥接 normalize]
+  B --> I[kernel.ingest]
+  I --> ROUTE{角色认领渠道?}
+  ROUTE -->|否| SKIP[忽略]
+  ROUTE -->|是| DB[(messages.db)]
+  DB --> UN[未读计数]
+  UN --> NT{是否可弹通知}
+  NT -->|是| Q[进入通知列表]
+  NT -->|否| ONLY[仅角标]
+  Q --> EVAL[规则评估]
+  EVAL -->|有可弹未读| INJ[kernel-wake 注入]
+  </div>
+</section>
+
+<section class="card">
+  <h2>消息库</h2>
+  <ul>
+    <li>每角色一个 <code>messages.db</code>。</li>
+    <li>字段含渠道、目标、发送者、内容、时间、消息号、是否 @、已读状态。</li>
+    <li>她的回复也会写入并标为已读，避免污染未读角标。</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>通知规则（按渠道配置）</h2>
+  <table>
+    <tr><th>规则</th><th>工作逻辑</th></tr>
+    <tr><td><code>dmPriority</code></td><td>私聊优先：到达即弹，不静默；并开启聚焦窗口。</td></tr>
+    <tr><td><code>atOnly</code></td><td>群消息仅在 @她 时才进入可弹列表。</td></tr>
+    <tr><td><code>silentMinutes</code></td><td>进入该 App 后的静默期；期间新消息只记未读。</td></tr>
+    <tr><td><code>format</code></td><td>通知文案模板，支持 {source} {count} {target}。</td></tr>
+    <tr><td><code>notifyFocusMinutes</code></td><td>私聊到达后，其它渠道通知被按住的分钟数。</td></tr>
+  </table>
+</section>
+
+<section class="card">
+  <h2>未读如何变成她的回合</h2>
+  <ol>
+    <li>规则评估发现存在<strong>可弹</strong>未读。</li>
+    <li>通过通知闸门（开关、冷却、每日上限、夜间静默）。</li>
+    <li>注入 <code>{"type":"kernel-wake","notifications":[...]}</code>。</li>
+    <li>她用 App 工具查看；需要回时 <code>app_send</code>。</li>
+    <li>点开即消：工具 <code>her_mark_read</code> 或进入 App 翻页自动标已读。</li>
+  </ol>
+  <div class="note">有未读时心绪规则让路，避免「消息还没看又额外戳一次」。</div>
+</section>
+
+<section class="card">
+  <h2>设置位置</h2>
+  <ul>
+    <li>渠道通知规则：角色面板 → 消息 → 渠道规则。</li>
+    <li>通知注入开关与上限：设置 → 心绪闸门旁的「夜间静默与通知」。</li>
+    <li>私聊聚焦屏蔽：同上 <code>notifyFocusMinutes</code>。</li>
+  </ul>
+</section>
+
+<footer class="doc">通知与消息层 · dsh-her-kernel</footer>
+</div>
+<script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+</body>
+</html>

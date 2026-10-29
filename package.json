@@ -1,0 +1,27 @@
+{
+  "name": "dsh-her-kernel",
+  "version": "0.1.0",
+  "description": "她的内核：统一人格、记忆、情绪、生活、通知、App 工具路由。借鉴 dsh-feiyu-mood(MIT)、dsh-qq-companion(BSD-3)、dsh-bilibili-plugin(MIT)，遵守各开源协议。",
+  "type": "module",
+  "main": "lib/index.js",
+  "license": "MIT",
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ]
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  }
+}

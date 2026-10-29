@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>日子层 · 工作逻辑</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+<header class="doc">
+  <h1>日子层（作息与生活）</h1>
+  <div class="sub">回答「她这会儿在做什么、还有多少精力」。作息完全由角色自己安排，内核不硬编码日程。</div>
+</header>
+
+<nav class="toc">
+  <a href="00-overview.html">总览</a>
+  <a href="01-heart.html">心绪层</a>
+  <a href="02-life.html">日子层</a>
+  <a href="03-memory.html">记忆层</a>
+  <a href="04-notify.html">通知与消息</a>
+  <a href="05-session.html">会话与出站</a>
+  <a href="06-rules.html">规则触发</a>
+  <a href="07-bridge.html">QQ 桥接</a>
+</nav>
+
+<section class="card">
+  <h2>文件与职责</h2>
+  <table>
+    <tr><th>文件</th><th>内容</th></tr>
+    <tr><td><code>life-schedule.json</code></td><td>工作日/周末时间块 + 特别日期安排。仅 <code>life_schedule</code> / <code>life_schedule_set</code> 工具可改。</td></tr>
+    <tr><td><code>state.json</code> 的 <code>life</code> 段</td><td>当前活动、精力/兴致/想黏人、今日流水、日记提醒标记。</td></tr>
+  </table>
+  <div class="note">面板对作息只读。修改入口在她的工具侧，保证「日程完全由角色控制」。</div>
+</section>
+
+<section class="card">
+  <h2>时间块如何生效</h2>
+  <div class="mermaid">
+flowchart LR
+  NOW[当前时刻] --> BLK[按日期选块列表]
+  BLK --> CUR[命中块 kind]
+  CUR --> NEED[按 kind 加减 精力/兴致/想黏人]
+  CUR --> ACT[写入当前活动]
+  NEED --> R[心绪规则可读忙闲]
+  ACT --> R
+  </div>
+  <ul>
+    <li>块格式：<code>{ from: "HH:MM", to: "HH:MM", kind: "wait|sleep|work|...", label?: "自定义" }</code>。</li>
+    <li>跨夜块（from &gt; to）合法。</li>
+    <li>没有命中任何块时，回落为「待着」。</li>
+    <li><strong>惰性推进</strong>：只有在读取状态或规则评估时才按流逝时间补算，不靠后台定时器。</li>
+  </ul>
+  <h3>活动种类（kind）与效果方向</h3>
+  <table>
+    <tr><th>kind 示例</th><th>语义</th><th>对需求的大致影响</th></tr>
+    <tr><td>sleep / night</td><td>睡觉、深夜</td><td>精力回升或下降按表；规则默认排除</td></tr>
+    <tr><td>wake / home</td><td>起床、在家</td><td>小幅回升</td></tr>
+    <tr><td>schedule / out</td><td>上课、出门</td><td>精力下降、兴致略变；规则常排除</td></tr>
+    <tr><td>wait / chat</td><td>待着、可聊</td><td>想黏人上升；规则更易命中</td></tr>
+    <tr><td>stars / anime / game</td><td>兴趣活动</td><td>兴致上升</td></tr>
+  </table>
+</section>
+
+<section class="card">
+  <h2>日记提醒</h2>
+  <ul>
+    <li>条件：当天日记文件不存在、已过「日记提醒点后」、且当天尚未提醒过。</li>
+    <li>行为：在状态注入里加一行路径提示。<strong>不产生额外回合，不是定时器。</strong></li>
+    <li>设置：<code>life.diaryNudgeAfterHour</code>（面板「设置 → 日子」）。</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>她如何改日程</h2>
+  <pre>life_schedule      // 查看当前作息
+life_schedule_set  // 写入工作日/周末/特别日期
+                   // { weekday: [...], weekend: [...], special: {...}, note }</pre>
+  <p>空日程时，状态注入会提示可用 <code>life_schedule_set</code> 自行安排。内核不会替她预填模板。</p>
+</section>
+
+<section class="card">
+  <h2>与其它层的接口</h2>
+  <table>
+    <tr><th>去向</th><th>用途</th></tr>
+    <tr><td>心绪规则</td><td>读取 <code>life.activity.kind</code> 做忙闲过滤（activityIn / activityOut）</td></tr>
+    <tr><td>提示词注入</td><td>「她的日子」一行：时间、当前活动、三项需求、今日流水</td></tr>
+    <tr><td>面板</td><td>状态页只读作息卡 + 今日时间线</td></tr>
+  </table>
+</section>
+
+<footer class="doc">日子层 · dsh-her-kernel</footer>
+</div>
+<script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+</body>
+</html>

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>心绪层 · 工作逻辑</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+<header class="doc">
+  <h1>心绪层</h1>
+  <div class="sub">情绪与念头合并后的单层状态。表情、主动规则、面板读数都来自这一份数据。系数在角色面板「状态 → 调节」里改，公式见下。</div>
+</header>
+
+<nav class="toc">
+  <a href="00-overview.html">总览</a>
+  <a href="01-heart.html">心绪层</a>
+  <a href="02-life.html">日子层</a>
+  <a href="03-memory.html">记忆层</a>
+  <a href="04-notify.html">通知与消息</a>
+  <a href="05-session.html">会话与出站</a>
+  <a href="06-rules.html">规则触发</a>
+  <a href="07-bridge.html">QQ 桥接</a>
+</nav>
+
+<section class="card">
+  <h2>数据结构</h2>
+  <p>存于 <code>state.json</code> 的 <code>heart</code> 段（版本 v3）。旧的心情七维与心思五维已合并，迁移时自动完成并备份为 <code>state.json.bak-v2</code>。</p>
+  <table>
+    <tr><th>字段</th><th>含义</th></tr>
+    <tr><td><code>base</code></td><td>底色 0–100，整体情绪基调</td></tr>
+    <tr><td><code>dims</code></td><td>十维数值，见下表</td></tr>
+    <tr><td><code>lastSpokeAt</code></td><td>上次主动开口（含注入标记）时间</td></tr>
+    <tr><td><code>lastUserMsgAt</code></td><td>主人上次发来消息的时间</td></tr>
+    <tr><td><code>lastOutboundAt</code></td><td>上次她主动发出的时间</td></tr>
+    <tr><td><code>daily</code></td><td>当日通知注入次数、规则注入次数</td></tr>
+    <tr><td><code>timeline</code></td><td>主动相关短记录（句子级，不进提示词正文）</td></tr>
+    <tr><td><code>moodTimeline</code></td><td>底色变化流水</td></tr>
+  </table>
+
+  <h3>十维</h3>
+  <div class="grid2">
+    <div>
+      <table>
+        <tr><th>键</th><th>中文</th><th>主要推高来源</th></tr>
+        <tr><td><code>miss</code></td><td>思念</td><td>静默变久、主人未回</td></tr>
+        <tr><td><code>joy</code></td><td>开心</td><td>被夸、好事、分享成功</td></tr>
+        <tr><td><code>calm</code></td><td>踏实</td><td>顺利、守约</td></tr>
+        <tr><td><code>sweet</code></td><td>甜蜜</td><td>亲昵互动</td></tr>
+        <tr><td><code>sad</code></td><td>难过</td><td>被忽略、坏事</td></tr>
+      </table>
+    </div>
+    <div>
+      <table>
+        <tr><th>键</th><th>中文</th><th>主要推高来源</th></tr>
+        <tr><td><code>worry</code></td><td>担心</td><td>异常、久未回应</td></tr>
+        <tr><td><code>heartache</code></td><td>心疼</td><td>知道主人受挫</td></tr>
+        <tr><td><code>jealous</code></td><td>吃醋</td><td>主人与他人久聊</td></tr>
+        <tr><td><code>tired</code></td><td>疲惫</td><td>作息推移、忙</td></tr>
+        <tr><td><code>curious</code></td><td>好奇</td><td>新事物、记忆写入</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>如何变化</h2>
+  <div class="mermaid">
+flowchart LR
+  EVT[事件] --> B[bump / hookEvent]
+  TIME[时间流逝] --> D[decay 衰减]
+  B --> H[heart 当前值]
+  D --> H
+  H --> FACE[提示词注入：底色+最强维]
+  H --> RULE[规则触发层]
+  </div>
+  <ul>
+    <li><strong>事件驱动</strong>：<code>state_note</code>、<code>bump(kind)</code>、<code>hookEvent</code> 按真实交互加减维度。</li>
+    <li><strong>衰减</strong>：每次读取或评估时按小时向基线回归；静默超过半小时后思念额外缓慢上升。</li>
+    <li><strong>强度</strong>：取十维最大值。只用于展示与阈值参考；真正是否注入由规则层决定。</li>
+    <li><strong>lastSpokeAt</strong>：仅规则注入或她真实开口更新；通知注入不算开口。</li>
+  </ul>
+
+  <h3>公式（参数可在面板「调节」里改）</h3>
+  <table>
+    <tr><th>变化</th><th>公式</th><th>配置键</th></tr>
+    <tr><td>底色衰减</td><td><code>base ← base + (mood.base − base) × 0.5^(Δt小时 / decayHalfHours)</code></td><td><code>mood.base / decayHalfHours / floor</code></td></tr>
+    <tr><td>她记一笔底色</td><td><code>base += round(moodDelta / stepDivisor)</code></td><td><code>mood.stepDivisor</code></td></tr>
+    <tr><td>十维向基线</td><td><code>d += (baselines[k]−d) × min(Δt小时 × dimDecayPerHour, dimDecayCap)</code></td><td><code>mood.dimDecay*</code>、<code>heart.baselines.*</code></td></tr>
+    <tr><td>静默思念</td><td><code>Δt&gt;0.5h 时 miss += min(Δt小时 × missPerSilenceHour, missSilenceCap)</code></td><td><code>mood.missPer*</code></td></tr>
+    <tr><td>她记 moodDelta</td><td><code>d&gt;0: joy+=d, miss−=d/2；d&lt;0: sad+=|d|, miss+=|d|/2</code></td><td>—</td></tr>
+    <tr><td>bump(userMsg)</td><td><code>miss −= amount×2</code>（默认 amount=3）</td><td>工具参数 amount</td></tr>
+    <tr><td>bump(replied)</td><td><code>miss −= amount</code></td><td>同上</td></tr>
+    <tr><td>bump(praised)</td><td><code>joy += amount×2</code></td><td>同上</td></tr>
+    <tr><td>日子推进</td><td>每 <code>stepMinutes</code> 分钟按活动 kind 加减 energy/interest/company；超 <code>gapFoldHours</code> 重置为 <code>gapReset</code></td><td><code>life.*</code></td></tr>
+  </table>
+</section>
+
+<section class="card">
+  <h2>设置项与工作逻辑（最小粒度）</h2>
+  <p>路径：角色面板 → 状态 / 设置。每个设置项下方均附工作说明。</p>
+  <table>
+    <tr><th>设置</th><th>默认</th><th>工作逻辑</th></tr>
+    <tr><td>基线底色</td><td>70</td><td>长时间静默后底色向此值回归。越高越容易显得心情好。</td></tr>
+    <tr><td>下限</td><td>0</td><td>底色衰减允许到达的最低值。</td></tr>
+    <tr><td>衰减半衰期（小时）</td><td>12</td><td>经过该时长，偏离基线的部分走完一半。数字越大情绪越持久。</td></tr>
+    <tr><td>注入可信门槛</td><td>60</td><td>记一笔状态时，置信度低于此值不把原因写进提示词。</td></tr>
+    <tr><td>每日最多注入</td><td>6</td><td>一天最多把几次「因何变化」写进提示词。</td></tr>
+    <tr><td>显著底色阈值</td><td>3</td><td>相对基线偏离超过此值才记入底色时间线。</td></tr>
+    <tr><td>记一笔除数</td><td>3</td><td>state_note 的 moodDelta 除以该值得到底色增量。</td></tr>
+    <tr><td>十维回归/时、单次上限</td><td>0.06 / 0.4</td><td>十维每小时靠近基线的比例；单次评估最多走的比例。</td></tr>
+    <tr><td>沉默思念/时、单次上限</td><td>1.2 / 25</td><td>静默后思念每小时涨幅与单次评估上限。</td></tr>
+    <tr><td>日子步长 / 断档折叠</td><td>5 分 / 48 时</td><td>推进粒度；超时未推进则 needs 重置。</td></tr>
+    <tr><td>启用心绪规则</td><td>开</td><td>总开关。关后不再评估规则、不再注入 kernel-heart。</td></tr>
+    <tr><td>想到阈值</td><td>35</td><td>强度展示用「想一想」档，不直接触发注入。</td></tr>
+    <tr><td>开口阈值</td><td>72</td><td>进入规则匹配的强度下限；规则自身条件可以更严。</td></tr>
+    <tr><td>静默多久（分）</td><td>30</td><td>距主人上次说话至少多久才允许主动触发。</td></tr>
+    <tr><td>两次开口间隔（分）</td><td>60</td><td>距上次主动开口的最短间隔。</td></tr>
+    <tr><td>每日最多规则触发</td><td>3</td><td>当日 kernel-heart 注入上限。</td></tr>
+    <tr><td>规则冷却（分）</td><td>90</td><td>任意规则注入后的全局冷却。</td></tr>
+    <tr><td>未回复不叠加</td><td>开</td><td>主动发出后主人未回且在宽限期内，不再主动戳。</td></tr>
+    <tr><td>未回复宽限（分）</td><td>180</td><td>「未回」判定窗口。</td></tr>
+    <tr><td>夜间静默起止</td><td>23:30–07:30</td><td>时段内不注入 kernel-heart。</td></tr>
+    <tr><td>通知注入 / 冷却 / 日上限</td><td>开 / 10 分 / 8</td><td>通知路径独立于规则，有未读时优先。</td></tr>
+    <tr><td>确定性随机与种子</td><td>关 / dsh</td><td>测试时固定种子可复现抖动与概率。</td></tr>
+    <tr><td>十维基线</td><td>见配置</td><td>衰减时各维向对应基线回归的落点。</td></tr>
+  </table>
+</section>
+
+<section class="card">
+  <h2>注入给她的内容</h2>
+  <p>状态注入是散文式摘要（底色 + 最强维 + 原因），用于日常表达。规则触发注入是<strong>纯 JSON 数值</strong>，不含祈使句，详见「规则触发」页。</p>
+  <pre>{
+  "type": "kernel-heart",
+  "rule": "miss-pm",
+  "base": 61,
+  "strength": 87,
+  "dims": { "miss": 87, "joy": 24, ... },
+  "silenceMin": 132,
+  "life": { "kind": "wait", "label": "待着" },
+  "fired": { "dim": "miss", "base": 70, "effective": 66, "chance": 0.75 }
+}</pre>
+</section>
+
+<footer class="doc">心绪层 · dsh-her-kernel</footer>
+</div>
+<script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+</body>
+</html>

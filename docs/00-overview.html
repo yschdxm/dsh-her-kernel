@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>内核总览 · 分层工作逻辑</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+<header class="doc">
+  <h1>小鲸内核 · 总览</h1>
+  <div class="sub">说明内核由哪些层组成、数据如何流动、一次「她说话」要经过哪些步骤。阅读顺序建议：先读本页，再按兴趣点进各层。</div>
+</header>
+
+<nav class="toc">
+  <a href="00-overview.html">总览</a>
+  <a href="01-heart.html">心绪层</a>
+  <a href="02-life.html">日子层</a>
+  <a href="03-memory.html">记忆层</a>
+  <a href="04-notify.html">通知与消息</a>
+  <a href="05-session.html">会话与出站</a>
+  <a href="06-rules.html">规则触发</a>
+  <a href="07-bridge.html">QQ 桥接</a>
+</nav>
+
+<section class="card">
+  <h2>一句话架构</h2>
+  <p>内核把「她是谁、她心里什么样、她今天在做什么、她记得什么、外面谁找她」拆成若干层；层与层只通过明确的数据接口协作。<strong>渠道消息不会直接塞进对话</strong>，她用工具主动查看；<strong>出站必过安全审核</strong>。</p>
+  <div class="mermaid">
+flowchart TB
+  subgraph EXT [外部]
+    QQ[QQ 好友/群]
+    USER[主人在面板/会话里]
+  end
+  subgraph KERNEL [dsh-her-kernel]
+    BR[桥接层 qq-bridge]
+    MSG[消息与通知层]
+    SESS[会话层 agent-session]
+    OUT[出站分类器]
+    HEART[心绪层]
+    LIFE[日子层]
+    MEM[记忆层]
+    RULE[规则触发层]
+  end
+  QQ -->|入站| BR --> MSG
+  MSG -->|只入库+通知| RULE
+  RULE -->|结构化注入| SESS
+  HEART --> RULE
+  LIFE --> RULE
+  MEM --> SESS
+  HEART --> SESS
+  LIFE --> SESS
+  SESS -->|她用 App 工具回| OUT --> BR -->|出站| QQ
+  USER --> SESS
+  SESS --> USER
+  </div>
+</section>
+
+<section class="card">
+  <h2>层一览</h2>
+  <table>
+    <tr><th>层</th><th>职责</th><th>关键文件</th></tr>
+    <tr><td>心绪层</td><td>底色 + 十维心情/念头，一次衰减，供表情与主动规则共用</td><td><code>lib/state.js</code></td></tr>
+    <tr><td>日子层</td><td>作息表、精力/兴致/想黏人、日记提醒；作息由角色自管</td><td><code>lib/state.js</code>（life 段）</td></tr>
+    <tr><td>记忆层</td><td>长期记忆写入/搜索/藏起；上下文预算裁剪</td><td><code>lib/memory.js</code> <code>lib/context.js</code></td></tr>
+    <tr><td>通知与消息</td><td>渠道消息入库、未读、点开即消、弹不弹</td><td><code>lib/msgstore.js</code> <code>lib/notify.js</code></td></tr>
+    <tr><td>会话与出站</td><td>唯一专属会话、注入、回合结束发回复、拦截回流</td><td><code>lib/agent-session.js</code></td></tr>
+    <tr><td>规则触发</td><td>事件驱动评估：通知注入或心绪规则注入；无插件定时器</td><td><code>lib/wake.js</code></td></tr>
+    <tr><td>桥接层</td><td>协议适配、出站审核、二维码与状态</td><td><code>forks/qq-bridge</code></td></tr>
+  </table>
+</section>
+
+<section class="card">
+  <h2>两条主路径</h2>
+  <h3>路径 A · 外面有人找她</h3>
+  <ol>
+    <li>QQ 消息进入桥接 → 内核 <code>ingest</code> → 只写消息库 + 记未读。</li>
+    <li>触发一次规则评估：若存在可弹未读 → 注入结构化通知数据（<code>kernel-wake</code>）。</li>
+    <li>她在自己的会话里看到数据 → 用 <code>app_enter</code> / <code>app_fetch</code> 查看 → 决定是否 <code>app_send</code>。</li>
+    <li>出站经过分类器 → 再发回 QQ。</li>
+  </ol>
+  <h3>路径 B · 她心里起变化</h3>
+  <ol>
+    <li>事件（被夸、被忽略、写记忆、回合结束等）触发规则评估。</li>
+    <li>无未读时按「心绪规则」匹配：维度、时间窗、忙闲、随机。</li>
+    <li>命中则注入纯数值 <code>kernel-heart</code>（无话术）。</li>
+    <li>她自行决定是否行动；未说出口的内容不会伪装成已发生的对话。</li>
+  </ol>
+  <div class="note">设计约束：没有插件级周期定时器。完全无消息、无回合、无事件的深夜不会自己醒来。需要墙钟行为时，由角色自己创建日程提醒。</div>
+</section>
+
+<section class="card">
+  <h2>配置放哪</h2>
+  <ul>
+    <li><code>~/.dsh/her-kernel/config.json</code>：全局数值、心绪规则、记忆策略、渠道规则。</li>
+    <li><code>&lt;工作区&gt;/.dsh-her/character.json</code>：角色卡与渠道认领。</li>
+    <li><code>&lt;工作区&gt;/.dsh-her/state.json</code>：心绪 + 日子状态。</li>
+    <li><code>&lt;工作区&gt;/.dsh-her/life-schedule.json</code>：作息表（仅角色可改）。</li>
+    <li><code>&lt;工作区&gt;/.dsh-her/memory.db</code> / <code>messages.db</code>：记忆与消息。</li>
+  </ul>
+</section>
+
+<footer class="doc">dsh-her-kernel 分层文档 · 与代码同步维护 · 改 forks/ 后请重跑 gen_code_manual.py</footer>
+</div>
+<script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+</body>
+</html>

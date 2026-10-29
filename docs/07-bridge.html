@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>QQ 桥接层 · 工作逻辑</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+<header class="doc">
+  <h1>QQ 桥接层</h1>
+  <div class="sub">协议适配与安全边界。插件本身不包含 NapCat；只按 OneBot v11 约定通信。</div>
+</header>
+
+<nav class="toc">
+  <a href="00-overview.html">总览</a>
+  <a href="01-heart.html">心绪层</a>
+  <a href="02-life.html">日子层</a>
+  <a href="03-memory.html">记忆层</a>
+  <a href="04-notify.html">通知与消息</a>
+  <a href="05-session.html">会话与出站</a>
+  <a href="06-rules.html">规则触发</a>
+  <a href="07-bridge.html">QQ 桥接</a>
+</nav>
+
+<section class="card">
+  <h2>部署关系</h2>
+  <div class="mermaid">
+flowchart LR
+  subgraph DSH [dsh-web 进程]
+    QB[qq-bridge 插件]
+    HK[her-kernel]
+    QB <--> HK
+  end
+  subgraph DOCKER [NapCat 容器]
+    NC[NapCat / QQ 客户端]
+  end
+  NC -->|反向 WebSocket 8643| QB
+  QB -->|OneBot HTTP 3000| NC
+  NC -->|WebUI 6099| QB
+  </div>
+  <ul>
+    <li>反向 WS：NapCat 连入插件 8643 端口推送事件。</li>
+    <li>OneBot HTTP：插件调用只读接口与发消息（发消息经内核出站）。</li>
+    <li>WebUI：刷新登录二维码、重启容器等运维接口。</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>入站与出站</h2>
+  <table>
+    <tr><th>方向</th><th>路径</th><th>是否审核</th></tr>
+    <tr><td>入站</td><td>NapCat → normalize → kernel.ingest</td><td>不拦，只入库+通知</td></tr>
+    <tr><td>出站</td><td>内核 sendOutbound → 分类器 → NapCat 发送</td><td>必审：关键词 + 可选 LLM</td></tr>
+    <tr><td>只读工具</td><td>qq_napcat_api 白名单</td><td>不能直接发消息</td></tr>
+  </table>
+</section>
+
+<section class="card">
+  <h2>出站分类器（双层）</h2>
+  <div class="mermaid">
+flowchart LR
+  T[待发文本] --> K[第一层 关键词快筛]
+  K -->|命中 block| B[拦截]
+  K -->|未命中| L{LLM 审核开启?}
+  L -->|关| P[放行]
+  L -->|开| J[deepseek-flash 判定 JSON]
+  J --> C{allow=false 且 confidence≥阈值?}
+  C -->|是| B
+  C -->|否| P
+  B --> R[reason 回流给角色]
+  </div>
+  <p>规则与审核提示词在角色面板 → 消息 → 出站分类器中编辑，按工具（群/私聊）独立。</p>
+</section>
+
+<section class="card">
+  <h2>登录二维码</h2>
+  <ol>
+    <li>NapCat 未登录时把 <code>qrcode.png</code> 写在容器内。</li>
+    <li>面板读取 <code>/qq-bridge/qrcode</code> 显示图片，并显示文件年龄。</li>
+    <li><strong>刷新按钮</strong>调用 <code>/qq-bridge/qr/refresh</code>：登录 NapCat WebUI → 请求 <code>RefreshQRcode</code> → 容器重写图片 → 面板重新拉取。</li>
+    <li>仅改浏览器缓存参数无法得到新码（这是旧实现失效的原因）。</li>
+    <li>进程异常时用「重启 NapCat」：容器重启后重新出码并重连反向 WS。</li>
+  </ol>
+  <table>
+    <tr><th>状态阶段</th><th>含义</th></tr>
+    <tr><td>容器未运行</td><td>docker 进程不在</td></tr>
+    <tr><td>启动中</td><td>已运行但尚未出码</td></tr>
+    <tr><td>等待扫码登录</td><td>二维码文件较新</td></tr>
+    <tr><td>二维码可能已过期</td><td>文件超过约 3 分钟未更新</td></tr>
+    <tr><td>在线</td><td>登录成功且推送已连接</td></tr>
+  </table>
+</section>
+
+<section class="card">
+  <h2>HTTP 接口一览</h2>
+  <table>
+    <tr><th>路径</th><th>方法</th><th>用途</th></tr>
+    <tr><td><code>/qq-bridge/status</code></td><td>GET</td><td>阶段、容器、登录、推送、二维码年龄</td></tr>
+    <tr><td><code>/qq-bridge/qrcode</code></td><td>GET</td><td>当前二维码 PNG</td></tr>
+    <tr><td><code>/qq-bridge/qr/refresh</code></td><td>POST</td><td>请求 NapCat 重新出码</td></tr>
+    <tr><td><code>/qq-bridge/napcat/restart</code></td><td>POST</td><td>重启容器</td></tr>
+    <tr><td><code>/qq-bridge/rules</code></td><td>GET/POST</td><td>读写出站审核规则</td></tr>
+  </table>
+</section>
+
+<section class="card">
+  <h2>安全边界</h2>
+  <ul>
+    <li>不把可直接发送的接口暴露给角色工具。</li>
+    <li>token 文件不进入前端、不写进日志。</li>
+    <li>群消息默认白名单；私聊仅联系配置的管理员。</li>
+  </ul>
+</section>
+
+<footer class="doc">QQ 桥接层 · dsh-qq-bridge</footer>
+</div>
+<script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+</body>
+</html>

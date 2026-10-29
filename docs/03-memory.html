@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>记忆层 · 工作逻辑</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+<header class="doc">
+  <h1>记忆层</h1>
+  <div class="sub">三层：系统提示词永不压缩 · 对话历史可折叠 · 长期记忆永远可查。目标：上下文过长时旧对话变成记忆，移出提示词但工具仍能查回。</div>
+</header>
+
+<nav class="toc">
+  <a href="00-overview.html">总览</a>
+  <a href="01-heart.html">心绪层</a>
+  <a href="02-life.html">日子层</a>
+  <a href="03-memory.html">记忆层</a>
+  <a href="04-notify.html">通知与消息</a>
+  <a href="05-session.html">会话与出站</a>
+  <a href="06-rules.html">规则触发</a>
+  <a href="07-bridge.html">QQ 桥接</a>
+</nav>
+
+<section class="card">
+  <h2>三层结构（永不混层）</h2>
+  <div class="mermaid">
+flowchart TB
+  A[系统提示词层<br/>人设/状态/通知] -->|永不折叠| A
+  B[对话历史层<br/>DSH agent 会话] -->|超预算| C[先归档再折叠]
+  C --> D[memory.db hidden 原文]
+  C --> E[memory.db topic 摘要]
+  C --> F[ctx.compaction 折叠历史]
+  D --> G[memory_hidden / memory_search]
+  E --> G
+  A -.->|每轮完整注入| B
+  </div>
+  <ul>
+    <li><strong>A 系统提示词</strong>：persona / 心绪 / 通知 / 渠道说明，经 <code>systemPrompt.context</code> 挂载，任何压缩路径不得触碰。</li>
+    <li><strong>B 对话历史</strong>：渠道与唤醒消息经 <code>followup</code> 进入 DSH 会话；超预算时内核先写 C，再请求平台 <code>ctx.compaction</code> 折叠。</li>
+    <li><strong>C 长期记忆</strong>：SQLite；原文进 <code>hidden</code>，摘要进 <code>topic</code>；她用工具主动查（<code>injectFar</code> 默认开，不自动塞每轮）。</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>存储</h2>
+  <p>每个角色独立 <code>memory.db</code>。层表：</p>
+  <table>
+    <tr><th>表（level）</th><th>存什么</th></tr>
+    <tr><td>fact / lesson / topic / project / rules / soul / user</td><td>长期记忆条目</td></tr>
+    <tr><td>hidden</td><td>被移出上下文的原文（可 <code>memory_hidden</code> 查回）</td></tr>
+  </table>
+  <p>importance 为 <strong>1–10</strong>（越高越重要）。自动归档 topic 的 <code>source_session</code> 为 <code>auto-archive</code> 或 <code>auto-archive-llm</code>。</p>
+</section>
+
+<section class="card">
+  <h2>预算归档流程</h2>
+  <ol>
+    <li>回合结束时统计自上次归档以来的对话字符。</li>
+    <li>若 ≥ <code>budgetChars</code> 且消息数 ≥ <code>archiveMinMessages</code>：</li>
+    <li>除最近 <code>keepRecent</code> 条外，原文逐条 <code>hide</code>；</li>
+    <li>写一条 <code>topic</code>：默认用会话同款模型精炼（最多 <code>autoExtractMax</code> 条 / 冷却 <code>autoExtractCooldownMin</code> 分）；正文不超过 <code>archiveSummaryMaxChars</code>；</li>
+    <li>若 <code>compactEnabled</code>：调用平台 <code>compactNow</code> 或 <code>compactIfNeeded</code> 折叠历史（失败只记日志，<strong>绝不删会话</strong>）。</li>
+  </ol>
+  <p>她主动 <code>memory_remember</code> 时，若 <code>moveOutContext</code> 且 <code>rememberHideContext</code>（或工具参数 <code>hide_context</code>），会把本回合原文 <code>hide</code>，但不触发折叠。</p>
+</section>
+
+<section class="card">
+  <h2>设置项（角色 → 记忆 → 记忆策略）</h2>
+  <table>
+    <tr><th>设置</th><th>默认</th><th>说明</th></tr>
+    <tr><td>已入记忆的对话移出上下文</td><td>开</td><td>预算归档写 hidden；主动记忆后 hide 本回合</td></tr>
+    <tr><td>记忆放远（不每轮注入）</td><td>开</td><td>不自动塞记忆进每轮</td></tr>
+    <tr><td>默认重要级(1~10)</td><td>2</td><td>写入默认 importance</td></tr>
+    <tr><td>搜索默认返回条数</td><td>8</td><td>memory_search 上限</td></tr>
+    <tr><td>归档时 LLM 精炼最多几条</td><td>3</td><td>0=只用规则拼接摘要</td></tr>
+    <tr><td>LLM 精炼冷却(分)</td><td>10</td><td>与会话同 provider/model</td></tr>
+    <tr><td>上下文字符预算</td><td>24000</td><td>触发归档+折叠</td></tr>
+    <tr><td>永远保留最近几条</td><td>4</td><td>永不归档</td></tr>
+    <tr><td>超预算时自动归档</td><td>开</td><td>关=只诊断</td></tr>
+    <tr><td>归档 topic 重要级(1~10)</td><td>4</td><td>自动 topic 的 importance</td></tr>
+    <tr><td>摘要正文最大字数</td><td>1200</td><td>topic 正文上限</td></tr>
+    <tr><td>归档最少消息数</td><td>6</td><td>防抖</td></tr>
+    <tr><td>归档后折叠会话历史</td><td>开</td><td>调用平台 compaction</td></tr>
+    <tr><td>折叠用自动压力策略</td><td>关</td><td>开=compactIfNeeded</td></tr>
+    <tr><td>主动记忆时隐藏本回合</td><td>开</td><td>remember 后 hide</td></tr>
+    <tr><td>精炼用 provider(可空)</td><td>空</td><td>空=与会话相同</td></tr>
+    <tr><td>搜索接口最大返回</td><td>20</td><td>App 消息搜索</td></tr>
+  </table>
+</section>
+
+<section class="card">
+  <h2>与会话层的关系</h2>
+  <ul>
+    <li>记忆<strong>不替代</strong>平台会话日志；折叠由平台完成，内核只触发并先归档。</li>
+    <li>侧边整理只写库，<strong>不往对话里插「整理完成」消息</strong>。</li>
+    <li>人设等系统提示词<strong>不在压缩流程中</strong>。</li>
+  </ul>
+</section>
+
+<footer class="doc">记忆层 · dsh-her-kernel</footer>
+</div>
+<script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+</body>
+</html>

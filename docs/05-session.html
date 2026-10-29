@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>会话与出站 · 工作逻辑</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+<header class="doc">
+  <h1>会话与出站层</h1>
+  <div class="sub">一个角色只活在一个专属会话里。注入与工具只挂这个会话；回复外发必须经过安全分类器。</div>
+</header>
+
+<nav class="toc">
+  <a href="00-overview.html">总览</a>
+  <a href="01-heart.html">心绪层</a>
+  <a href="02-life.html">日子层</a>
+  <a href="03-memory.html">记忆层</a>
+  <a href="04-notify.html">通知与消息</a>
+  <a href="05-session.html">会话与出站</a>
+  <a href="06-rules.html">规则触发</a>
+  <a href="07-bridge.html">QQ 桥接</a>
+</nav>
+
+<section class="card">
+  <h2>单会话约束</h2>
+  <ul>
+    <li>每个角色一个固定会话（按工作区路径创建/恢复）。</li>
+    <li>人设、状态注入、工具经 <code>agent.ctx</code> 挂载，<strong>其它会话不可见</strong>。</li>
+    <li>会话必须归属工作区（attachSession），否则界面会「跳出工作区」。</li>
+    <li>会话不能停在归档态，否则每回合被平台拦成 blocked。</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>一回合的生命周期</h2>
+  <div class="mermaid">
+flowchart TB
+  TRIG[触发：主人消息 / kernel 注入 / 日程提醒] --> RUN[模型运行：读注入+工具]
+  RUN --> STOP[回合结束 turn-stopping]
+  STOP --> OUT{有渠道出站?}
+  OUT -->|有| SEND[sendOutbound → 分类器 → 渠道]
+  OUT -->|无| NOS[仅会话内可见，不外发]
+  SEND --> OK[发送成功]
+  SEND --> BLK[被拦截]
+  BLK --> FLOW[回流 send-blocked 结构化通知]
+  STOP --> EVAL[同时触发规则评估]
+  </div>
+</section>
+
+<section class="card">
+  <h2>注入类型</h2>
+  <table>
+    <tr><th>类型</th><th>来源</th><th>形态</th></tr>
+    <tr><td>渠道消息</td><td>—</td><td><strong>不注入</strong>，只入库</td></tr>
+    <tr><td>通知</td><td>规则层</td><td><code>kernel-wake</code> + 通知数组</td></tr>
+    <tr><td>心绪规则</td><td>规则层</td><td><code>kernel-heart</code> 纯数值</td></tr>
+    <tr><td>状态/人设</td><td>systemPrompt 上下文</td><td>常驻散文摘要</td></tr>
+  </table>
+</section>
+
+<section class="card">
+  <h2>出站路径</h2>
+  <ol>
+    <li>她调用 <code>app_send</code>（需先 <code>app_enter</code>）。</li>
+    <li>内核 <code>sendOutbound(channel, target, text)</code>。</li>
+    <li>桥接分类器：关键词快筛 → 可选 LLM 审核 → 放行或拦截。</li>
+    <li>放行则发往 QQ；拦截则返回 reason。</li>
+    <li>自动回合被拦时，内核补一条 <code>send-blocked</code> 结构化通知，供她下一回合看到理由。</li>
+  </ol>
+  <div class="note">kernel 触发的回合若她没有调用出站工具，文本只留在会话里，不会自动发到 QQ。</div>
+</section>
+
+<section class="card">
+  <h2>工具分层（仅她可见）</h2>
+  <table>
+    <tr><th>组</th><th>工具</th></tr>
+    <tr><td>状态</td><td>state_now / state_note</td></tr>
+    <tr><td>日子</td><td>life_schedule / life_schedule_set</td></tr>
+    <tr><td>记忆</td><td>memory_remember / memory_search / memory_hidden</td></tr>
+    <tr><td>通知</td><td>her_notifications / her_mark_read</td></tr>
+    <tr><td>App</td><td>app_list / app_enter / app_fetch / app_query / app_unread / app_send / app_exit</td></tr>
+    <tr><td>渠道只读</td><td>qq_napcat_api（白名单）</td></tr>
+  </table>
+</section>
+
+<footer class="doc">会话与出站层 · dsh-her-kernel</footer>
+</div>
+<script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+</body>
+</html>

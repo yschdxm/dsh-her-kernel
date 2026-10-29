@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>规则触发层 · 工作逻辑</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+<header class="doc">
+  <h1>规则触发层</h1>
+  <div class="sub">事件驱动的评估器：决定「要不要给她开一回合、开哪种回合」。没有插件定时器。</div>
+</header>
+
+<nav class="toc">
+  <a href="00-overview.html">总览</a>
+  <a href="01-heart.html">心绪层</a>
+  <a href="02-life.html">日子层</a>
+  <a href="03-memory.html">记忆层</a>
+  <a href="04-notify.html">通知与消息</a>
+  <a href="05-session.html">会话与出站</a>
+  <a href="06-rules.html">规则触发</a>
+  <a href="07-bridge.html">QQ 桥接</a>
+</nav>
+
+<section class="card">
+  <h2>何时评估</h2>
+  <table>
+    <tr><th>时机</th><th>cause</th><th>说明</th></tr>
+    <tr><td>渠道消息入库后</td><td><code>ingest</code></td><td>通知路径主入口</td></tr>
+    <tr><td>她任何回合结束</td><td><code>turn-end</code></td><td>含无出站的 kernel 回合；在「无出站早退」之前调用</td></tr>
+    <tr><td>桥接事件</td><td><code>event</code></td><td>被夸、被忽略、写记忆等</td></tr>
+  </table>
+  <p>同一事件风暴用一次微任务合并，避免连环注入。这不是周期定时器。</p>
+</section>
+
+<section class="card">
+  <h2>评估流程</h2>
+  <div class="mermaid">
+flowchart TB
+  REQ[request cause] --> FL[合并后 flush]
+  FL --> G0{角色启用? heart.enabled?}
+  G0 -->|否| END[结束]
+  G0 -->|是| DEC[decay + advance 算账]
+  DEC --> UN{有可弹未读?}
+  UN -->|有| NG[通知闸门]
+  NG -->|过| W[kernel-wake]
+  NG -->|不过| END2[规则也不跑，防堆叠]
+  UN -->|无| SCAN[按序扫 rules]
+  SCAN --> M{匹配 min/max/any/窗/忙闲/静默?}
+  M -->|否| NEXT[下一条]
+  M -->|是| GG[全局闸门]
+  GG -->|不过| NEXT
+  GG -->|过| CH[概率 chance]
+  CH -->|不过| NEXT
+  CH -->|过| H[kernel-heart 纯 JSON]
+  H --> RI[recordInject 节流]
+  NEXT --> DONE[一次最多一条]
+  </div>
+</section>
+
+<section class="card">
+  <h2>规则结构（每条都可配）</h2>
+  <pre>{
+  "id": "miss-pm",
+  "name": "午后想念",
+  "enabled": true,
+  "when": {
+    "min": { "miss": 70 },          // 各维 ≥（含抖动）
+    "max": { },                     // 各维 ≤
+    "any": [ { "joy": 80 } ],       // 任一组全满足
+    "silenceMin": 45,               // 主人静默分钟
+    "sinceSpokeMin": 60,            // 距上次开口分钟
+    "windows": [ { "from": "13:00", "to": "19:30" } ],
+    "weekdays": [],                 // 空 = 每天
+    "activityIn": [],               // 非空则活动必须在列表内
+    "activityOut": [ "sleep", "night", "out" ],
+    "maxUnread": 0
+  },
+  "jitter": {
+    "thresholdPct": 12,             // 阈值 ±12%
+    "windowMinutes": 25,            // 窗口两端 ±25 分
+    "chance": 0.75                  // 75% 概率放行
+  },
+  "cooldownMinutes": 120,
+  "materials": { "timeline": 6, "diary": true }
+}</pre>
+</section>
+
+<section class="card">
+  <h2>全局闸门（配置在 heart.gates）</h2>
+  <table>
+    <tr><th>闸门</th><th>逻辑</th></tr>
+    <tr><td>夜间静默</td><td>落在 quietHours 区间则不注入</td></tr>
+    <tr><td>每日上限</td><td>当日 rule 注入次数 ≥ dailyCap 则停</td></tr>
+    <tr><td>规则冷却</td><td>距上次 kernel-heart 不足 cooldownMinutes 则停</td></tr>
+    <tr><td>静默 / 距开口</td><td>低于 minSilence / minSinceSpoke 则停</td></tr>
+    <tr><td>未回复不叠加</td><td>已发出且主人未回、仍在宽限期内则停</td></tr>
+  </table>
+</section>
+
+<section class="card">
+  <h2>注入载荷对比</h2>
+  <div class="grid2">
+    <div>
+      <h3>kernel-wake（通知）</h3>
+      <pre>{
+  "type": "kernel-wake",
+  "notifications": [
+    { "channel": "qq-private",
+      "target": "…",
+      "count": 2,
+      "text": "工具：… 有 2 条消息" }
+  ]
+}</pre>
+      <p>外部事件收件箱；她决定是否打开 App。</p>
+    </div>
+    <div>
+      <h3>kernel-heart（心绪）</h3>
+      <pre>{
+  "type": "kernel-heart",
+  "rule": "miss-pm",
+  "base": 61, "strength": 87,
+  "dims": { "miss": 87, … },
+  "silenceMin": 132,
+  "life": { "kind": "wait" },
+  "fired": { "dim": "miss",
+             "effective": 66,
+             "chance": 0.75 }
+}</pre>
+      <p>自身状态的数字切片；无祈使句、无寒暄。</p>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>为什么没有定时器</h2>
+  <ul>
+    <li>周期唤醒会让回合看起来像「有人叫她」，与「自己的状态变化」混淆。</li>
+    <li>完全无事件的深夜不评估——这是有意取舍。</li>
+    <li>需要定时自查时，角色使用平台日程工具创建提醒，属于她设定的任务。</li>
+    <li>作息换段靠惰性推进：下次任何事件评估时才会看到新活动。</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>设置入口</h2>
+  <p>角色面板 → 设置：心绪闸门、夜间静默与通知、随机、心绪规则列表（条件 JSON、概率、抖动、冷却均可改，可增删规则）。</p>
+</section>
+
+<footer class="doc">规则触发层 · dsh-her-kernel</footer>
+</div>
+<script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+</body>
+</html>
