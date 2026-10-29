@@ -26,6 +26,17 @@
 </nav>
 
 <section class="card">
+  <h2>主动意图（intent）</h2>
+  <table>
+    <tr><th>intent</th><th>含义</th><th>allowOutbound</th><th>配额</th></tr>
+    <tr><td><code>seek_master</code></td><td>来找主人说话/分享</td><td>true</td><td><code>dailyCap</code> / <code>cooldownMinutes</code></td></tr>
+    <tr><td><code>self_chore</code></td><td>自己做事：写日记、看日程、翻群、整理记忆</td><td>默认 false</td><td><code>selfDailyCap</code> / <code>selfCooldownMinutes</code> 等</td></tr>
+    <tr><td><code>reflect</code></td><td>只记 state_note / 写记忆，可不发消息</td><td>false</td><td>同 self</td></tr>
+  </table>
+  <p>载荷 <code>actions[]</code> 只是数据提示（diary / schedule / memory_review / group_peek / quiet / share），具体怎么做由她按人设决定。夜间静默对规则路径仍生效。</p>
+</section>
+
+<section class="card">
   <h2>何时评估</h2>
   <table>
     <tr><th>时机</th><th>cause</th><th>说明</th></tr>

@@ -860,6 +860,15 @@ window.__ModuleLoader__.load({
               ],
             }),
             h(ParamCard, {
+              title: '自治回合（自己做事）', cfg, setCfg,
+              entries: [
+                { label: '自治每日上限', path: 'heart.gates.selfDailyCap', unit: '次', tip: 'intent=self_chore/reflect 每日最多注入次数。与「找你」的日上限分开。' },
+                { label: '自治冷却', path: 'heart.gates.selfCooldownMinutes', unit: '分钟', tip: '两次自治注入最短间隔。' },
+                { label: '自治距开口', path: 'heart.gates.selfMinSinceSpokeMinutes', unit: '分钟', tip: '自治不要求「很久没开口」，可比找你更早触发。' },
+                { label: '自治静默', path: 'heart.gates.selfMinSilenceMinutes', unit: '分钟', tip: '距主人说话至少这么久才允许自治回合。' },
+              ],
+            }),
+            h(ParamCard, {
               title: '夜间静默与通知', cfg, setCfg,
               entries: [
                 { label: '夜间静默（仅心绪规则）', path: 'heart.gates.quietHours.enabled', kind: 'chk', tip: '打开：设定时段内不注入 kernel-heart。通知是否受此限制由各渠道「受夜间静默」决定，私聊默认不受限。' },
@@ -913,7 +922,17 @@ window.__ModuleLoader__.load({
                   h('span', { style: { fontSize: '12px', opacity: .55 } }, '分钟'),
                 ),
                 h('div', { 'data-hk-row': '' },
-                  h('span', { style: { fontSize: '12px' } }, '沉默'),
+                  h('span', { style: { fontSize: '12px' } }, '意图'),
+                  h('select', {
+                    'data-hk-input': '', style: { maxWidth: '140px', flex: 'none' },
+                    value: r.intent || 'seek_master',
+                    onChange: (e) => setRuleAt(i, 'intent', e.target.value),
+                  },
+                    h('option', { value: 'seek_master' }, '找你'),
+                    h('option', { value: 'self_chore' }, '自己做事'),
+                    h('option', { value: 'reflect' }, '只记不发'),
+                  ),
+                  h('span', { style: { fontSize: '12px', marginLeft: '6px' } }, '沉默'),
                   h('input', { 'data-hk-input': '', style: { maxWidth: '56px' }, type: 'number', min: 0, value: Number((r.when && r.when.silenceMin) || 0), onChange: (e) => setRuleAt(i, 'when.silenceMin', Number(e.target.value)) }),
                   h('span', { style: { fontSize: '12px', opacity: .55 } }, '分钟'),
                   h('span', { style: { fontSize: '12px', marginLeft: '6px' } }, '距开口'),

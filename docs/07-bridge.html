@@ -42,10 +42,11 @@ flowchart LR
   NC -->|WebUI 6099| QB
   </div>
   <ul>
-    <li>反向 WS：NapCat 连入插件 8643 端口推送事件。</li>
-    <li>OneBot HTTP：插件调用只读接口与发消息（发消息经内核出站）。</li>
+    <li>反向 WS：协议端连入插件推送事件（SnowLuma 现为 WS 客户端连 3001）。</li>
+    <li>OneBot HTTP：只读接口与发消息（发消息经内核出站）。</li>
     <li>WebUI：刷新登录二维码、重启容器等运维接口。</li>
   </ul>
+  <p><strong>群聊</strong>：渠道默认 <code>atOnly</code>——仅未读含 @她 才弹通知；入群/好友申请按 mention 处理，可弹通知，但<strong>不自动同意</strong>。角色卡 <code>groups</code> 白名单非空时，非名单群消息不入库。</p>
 </section>
 
 <section class="card">
