@@ -83,13 +83,21 @@ dsh-her-kernel/
 
 ## 安装（DeepSeek Harness）
 
-在 Harness 配置中以 `link:` 引用本目录，例如：
+官方推荐用插件管理安装 **bundle**（会写入 profile 的依赖与选择，勿手改 profile 的 `package.json` / `cordis.patch.yml`）。
 
-```json
-"dsh-her-kernel": "link:/path/to/dsh-her-kernel"
-```
+### 开发 / 本地目录（`link:`）
 
-改插件代码后重启宿主（或按你们的 HMR 流程）；**不要**在未理解影响的情况下随意改会触发全量 HMR 的补丁文件。
+1. 克隆本仓库到本地绝对路径。  
+2. 在 Harness 里用 `plugin_manager` → `install_bundle`，target 填**绝对路径**的包目录  
+   （官方开发源码构建也支持 `link:<绝对工作区包目录>`）。  
+3. 或在已装好的 profile 依赖里看到类似：  
+   `"dsh-her-kernel": "link:/absolute/path/to/dsh-her-kernel"`。
+
+改代码后按官方流程：链接包依赖已指向你的 checkout 时，需重新构建（如有）并重启宿主；**不要**手改 profile 的 `cordis.patch.yml`。
+
+### 依赖顺序
+
+先装并启用 **dsh-her-kernel**，再装桥接插件（如 [dsh-her-qq-bridge-sl](https://github.com/yschdxm/dsh-her-qq-bridge-sl)）。
 
 ## 与桥接的关系
 
