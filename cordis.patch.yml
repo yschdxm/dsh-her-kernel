@@ -108,12 +108,15 @@
               compaction: true
               toolResultPruner: true
             config:
+              # 自动压缩关闭：上下文压力由 her-kernel 按官方 tokenMeter 归档（keepRecent 条外进记忆）
               - id: compaction-basic
                 name: '@deepseek-ai/dsh-compaction-basic'
+                disabled: true
               - id: command-compact
                 name: '@deepseek-ai/dsh-command-compact'
               - id: tool-result-pruner
                 name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                disabled: true
                 config:
                   thresholdChars: 8192
                   headChars: 4096
